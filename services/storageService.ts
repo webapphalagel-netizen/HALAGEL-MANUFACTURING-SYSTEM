@@ -42,10 +42,6 @@ export const StorageService = {
     GoogleSheetsService.saveData('saveProduction', data);
   },
 
-  /**
-   * Deletes a production entry by ID.
-   * Uses robust String conversion for ID matching to handle mix of numeric/string IDs.
-   */
   deleteProductionEntry: (id: string): { updatedData: ProductionEntry[], deletedItem: ProductionEntry | null } => {
     try {
       const data = StorageService.getProductionData();
@@ -54,7 +50,6 @@ export const StorageService = {
       const targetItem = data.find(p => String(p.id) === targetId) || null;
       const updatedData = data.filter(p => String(p.id) !== targetId);
       
-      // Save immediately to local storage
       StorageService.saveProductionData(updatedData);
       
       return { updatedData, deletedItem: targetItem };
@@ -74,11 +69,29 @@ export const StorageService = {
   syncWithSheets: async () => {
     if (!GoogleSheetsService.isEnabled()) return;
     
+    // Pull Production Data
     const remoteProduction = await GoogleSheetsService.fetchData<ProductionEntry[]>('getProduction');
-    if (remoteProduction) localStorage.setItem(KEYS.PRODUCTION, JSON.stringify(remoteProduction));
+    if (remoteProduction && Array.isArray(remoteProduction)) {
+        localStorage.setItem(KEYS.PRODUCTION, JSON.stringify(remoteProduction));
+    }
     
+    // Pull Off Days
     const remoteOffDays = await GoogleSheetsService.fetchData<OffDay[]>('getOffDays');
-    if (remoteOffDays) localStorage.setItem(KEYS.OFF_DAYS, JSON.stringify(remoteOffDays));
+    if (remoteOffDays && Array.isArray(remoteOffDays)) {
+        localStorage.setItem(KEYS.OFF_DAYS, JSON.stringify(remoteOffDays));
+    }
+
+    // Pull Activity Logs
+    const remoteLogs = await GoogleSheetsService.fetchData<ActivityLog[]>('getLogs');
+    if (remoteLogs && Array.isArray(remoteLogs)) {
+        localStorage.setItem(KEYS.LOGS, JSON.stringify(remoteLogs));
+    }
+
+    // Pull Users (Optional but recommended for consistency)
+    const remoteUsers = await GoogleSheetsService.fetchData<User[]>('getUsers');
+    if (remoteUsers && Array.isArray(remoteUsers)) {
+        localStorage.setItem(KEYS.USERS, JSON.stringify(remoteUsers));
+    }
   },
   
   getLogs: (): ActivityLog[] => JSON.parse(localStorage.getItem(KEYS.LOGS) || '[]'),
@@ -92,7 +105,12 @@ export const StorageService = {
       };
       logs.unshift(newLog);
       if (logs.length > 1000) logs.pop();
+      
+      // Save locally
       localStorage.setItem(KEYS.LOGS, JSON.stringify(logs));
+      
+      // Push to cloud immediately
+      GoogleSheetsService.saveData('saveLogs', logs);
     } catch (err) {
       console.error("Logging error:", err);
     }
